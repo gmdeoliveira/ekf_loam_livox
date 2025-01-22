@@ -1,11 +1,9 @@
 <launch>
       <!--- param -->
       <rosparam command="load" file="$(find ekf_loam_livox)/config/ekf_loam_parameters.yaml" /> 
-      <rosparam command="load" file="$(find adaptive_filter_livox)/config/adaptive_filter_parameters.yaml" />
-      <rosparam command="load" file="$(find faster_lio)/config/mid360_test.yaml" />
 
       <!-- TFs -->
-      <include file="$(find ekf_loam)/launch/ekf_loam_tf.launch" />  
+      <include file="$(find ekf_loam_livox)/launch/ekf_loam_tf.launch" />  
 
       <!--- Extração de features da nuvem de pontos com o LIO-Livox --> 
       <node pkg="lio_livox" type="ScanRegistration" name="ScanRegistration" output="screen">
@@ -26,9 +24,18 @@
       <node pkg="faster_lio" type="run_mapping_online" name="laserMapping" output="screen" />	
 
       <!--Conversão das mensagens do Livox p/ CustomMsg-->
-	<node pkg="livox_ros_driver2" type="pointcloud_converter.py" name="pointcloud_converter" output="screen" /> 
+	<node pkg="livox_ros_driver2" 
+            type="pointcloud_converter.py" 
+            name="pointcloud_converter" 
+            output="screen" /> 
 
-      <!--- Mapeamento do EKF-LOAM --> 
+      <node pkg="ekf_loam_livox" 
+            type="LiDAR_IMU_Treatment"     
+            name="LiDAR_IMU_Treatment"     
+            output="screen">
+      </node>  
+
+      <!-- Mapeamento do EKF-LOAM --> 
       <node pkg="ekf_loam_livox" 
             type="LiDARMapping_livox"     
             name="LiDARMapping_livox"     
