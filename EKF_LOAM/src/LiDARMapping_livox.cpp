@@ -92,7 +92,7 @@ private:
     ros::Subscriber subLaserOdometry;
     ros::Subscriber subImu;
 
-    ros::Subscriber subTime; 
+    //ros::Subscriber subTime; 
 
     // odometry meessage and tf
     nav_msgs::Odometry odomAftMapped;
@@ -260,20 +260,20 @@ public:
         nh("~")
     {
         // Subscribers
-        subLaserCloudCornerLast = nh.subscribe<sensor_msgs::PointCloud2>("/livox_less_sharp_cloud", 2, &LiDARMapping::laserCloudCornerLastHandler, this);
-        subLaserCloudSurfLast = nh.subscribe<sensor_msgs::PointCloud2>("/livox_less_flat_cloud", 2, &LiDARMapping::laserCloudSurfLastHandler, this);
+        subLaserCloudCornerLast = nh.subscribe<sensor_msgs::PointCloud2>("/laser_cloud_corner", 2, &LiDARMapping::laserCloudCornerLastHandler, this);
+        subLaserCloudSurfLast = nh.subscribe<sensor_msgs::PointCloud2>("//laser_cloud_surf", 2, &LiDARMapping::laserCloudSurfLastHandler, this);
         //subOutlierCloudLast = nh.subscribe<sensor_msgs::PointCloud2>("/ekf_loam/outlier_cloud_last", 2, &LiDARMapping::laserCloudOutlierLastHandler, this);
-        subImu = nh.subscribe<sensor_msgs::Imu> ("/imu/data", 50, &LiDARMapping::imuHandler, this);
-        subTime = nh.subscribe<std_msgs::Time> ("/ekf_loam/LiDAROdometryTimeA", 1, &LiDARMapping::timeHandler, this); 
+        subImu = nh.subscribe<sensor_msgs::Imu> ("/imu_to_LiDARMapping", 50, &LiDARMapping::imuHandler, this);
+        //subTime = nh.subscribe<std_msgs::Time> ("/ekf_loam/LiDAROdometryTimeA", 1, &LiDARMapping::timeHandler, this); 
         // lidar odometry or filtered_odometry
         /*if (enableFilter){
             subLaserOdometry = nh.subscribe<nav_msgs::Odometry>("/ekf_loam/filter_odom_to_initOut", 5, &LiDARMapping::laserOdometryHandler, this);
         }else{
             subLaserOdometry = nh.subscribe<nav_msgs::Odometry>("/ekf_loam/laser_odom_to_init", 5, &LiDARMapping::laserOdometryHandler, this);
         }*/
-        subLaserOdometry = nh.subscribe<nav_msgs::Odometry>("/Odometry", 5, &LiDARMapping::laserOdometryHandler, this);
+        subLaserOdometry = nh.subscribe<nav_msgs::Odometry>("/Odometry_to_LiDARMapping", 5, &LiDARMapping::laserOdometryHandler, this);
         
-        // Publisher
+        // Publishers
         pubKeyPoses = nh.advertise<sensor_msgs::PointCloud2>("/ekf_loam/key_pose_origin", 2);
         pubLaserCloudSurround = nh.advertise<sensor_msgs::PointCloud2>("/ekf_loam/laser_cloud_surround", 2);
         pubOdomAftMapped = nh.advertise<nav_msgs::Odometry> ("/ekf_loam/aft_mapped_to_init", 5);       
@@ -835,9 +835,11 @@ public:
 
         for (int i = 0; i < pointSearchIndGlobalMap.size(); ++i)
           globalMapKeyPoses->points.push_back(cloudKeyPoses3D->points[pointSearchIndGlobalMap[i]]);
+
 	    // downsample near selected key frames
         downSizeFilterGlobalMapKeyPoses.setInputCloud(globalMapKeyPoses);
         downSizeFilterGlobalMapKeyPoses.filter(*globalMapKeyPosesDS);
+
 	    // extract visualized and downsampled key frames
         for (int i = 0; i < globalMapKeyPosesDS->points.size(); ++i){
 			int thisKeyInd = (int)globalMapKeyPosesDS->points[i].intensity;
@@ -845,6 +847,7 @@ public:
 			*globalMapKeyFrames += *transformPointCloud(surfCloudKeyFrames[thisKeyInd],    &cloudKeyPoses6D->points[thisKeyInd]);
 			//*globalMapKeyFrames += *transformPointCloud(outlierCloudKeyFrames[thisKeyInd], &cloudKeyPoses6D->points[thisKeyInd]);
         }
+        
 	    // downsample visualized points
         downSizeFilterGlobalMapKeyFrames.setInputCloud(globalMapKeyFrames);
         downSizeFilterGlobalMapKeyFrames.filter(*globalMapKeyFramesDS);
@@ -1461,6 +1464,7 @@ public:
          * update grsam graph
          */
         if (cloudKeyPoses3D->points.empty()){
+            //ROS_INFO("A nuvem de poses está vazia"); //DEBUG
             gtSAMgraph.add(PriorFactor<Pose3>(0, Pose3(Rot3::RzRyRx(transformTobeMapped[2], transformTobeMapped[0], transformTobeMapped[1]),
                                                        		 Point3(transformTobeMapped[5], transformTobeMapped[3], transformTobeMapped[4])), priorNoise));
             initialEstimate.insert(0, Pose3(Rot3::RzRyRx(transformTobeMapped[2], transformTobeMapped[0], transformTobeMapped[1]),
@@ -1469,6 +1473,7 @@ public:
             	transformLast[i] = transformTobeMapped[i];
         }
         else{
+            //ROS_INFO("A nuvem de poses TEM PONTOS!"); //DEBUG
             gtsam::Pose3 poseFrom = Pose3(Rot3::RzRyRx(transformLast[2], transformLast[0], transformLast[1]),
                                                 Point3(transformLast[5], transformLast[3], transformLast[4]));
             gtsam::Pose3 poseTo   = Pose3(Rot3::RzRyRx(transformAftMapped[2], transformAftMapped[0], transformAftMapped[1]),
@@ -1659,10 +1664,9 @@ int main(int argc, char** argv)
         nh_.param("/ekf_loam/mappingProcessInterval", mappingProcessInterval, double(0.1));
         nh_.param("/ekf_loam/imuQueLength", imuQueLength, int(100));
 
-        nh_.param("/ekf_loam/inertial_frame", inertial_frame, std::string("os1_initial"));
-        nh_.param("/ekf_loam/mapped_frame", mapped_frame, std::string("aft_mapped"));
-        nh_.param("/ekf_loam/init_frame", init_frame, std::string("os1_init"));
-
+        nh_.param("/ekf_loam/inertial_frame", inertial_frame, std::string("slam_init"));
+        nh_.param("/ekf_loam/mapped_frame", mapped_frame, std::string("map_odom"));
+        nh_.param("/ekf_loam/init_frame", init_frame, std::string("lidar_init"));
     }
     catch (int e)
     {
